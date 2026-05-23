@@ -2,7 +2,10 @@
   "permissions": {
     "allow": [
       "PowerShell(\\(Get-ChildItem -Path \"C:\\\\Users\\\\benja\\\\Desktop\\\\proyecto\" -Force | Measure-Object\\).Count)",
-      "Bash(python -c ' *)"
+      "Bash(python -c ' *)",
+      "Bash(python3 -c ' *)",
+      "Bash(make)",
+      "Bash(make clean *)"
     ]
   }
 }
