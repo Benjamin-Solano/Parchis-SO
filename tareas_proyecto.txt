@@ -1,0 +1,83 @@
+PROYECTO: SIMULADOR DE TORNEO DE PARCHÍS EN C (LINUX)
+Fecha de entrega: 10/06/2026 a las 23:55
+Entregable: archivo ZIP subido al aula virtual
+========================================================
+
+========================================================
+ESTUDIANTE A — Gestión de Procesos, Hilos y Planificación
+Puntos de rúbrica cubiertos: ~35 pts
+========================================================
+
+CÓDIGO:
+1. Implementar el proceso principal (main) que inicializa el juego.
+2. Usar fork() para crear los 4 procesos hijos (Rojo, Verde, Azul, Amarillo).
+3. Dentro de cada proceso hijo, usar pthread_create() para lanzar los 4 hilos
+   que representan las fichas de ese jugador.
+4. Usar wait() / waitpid() en el proceso padre para recoger estadísticas
+   finales de los hijos al terminar la partida.
+5. Implementar el proceso Árbitro (scheduler simulado) con algoritmo Round Robin
+   para asignar el turno de lanzamiento de dados a cada proceso jugador.
+6. (Opcional) Implementar sistema de prioridades dinámicas: si un jugador tiene
+   fichas cerca de ganar, otorgarle quantum de tiempo más largos.
+7. Escribir el Makefile del proyecto (compilación de todos los módulos).
+
+INFORME TÉCNICO:
+- Diagrama de procesos e hilos creados (qué genera qué, jerarquía).
+- Justificación de la elección del algoritmo de planificación (Round Robin
+  vs. prioridades).
+
+
+========================================================
+ESTUDIANTE B — Sincronización Avanzada y Memoria Compartida
+Puntos de rúbrica cubiertos: ~35 pts
+========================================================
+
+CÓDIGO:
+1. Definir e inicializar la estructura del tablero en memoria compartida
+   usando shmget / mmap, accesible para todos los procesos.
+2. Implementar un mutex (pthread_mutex_t) por cada casilla del tablero para
+   garantizar exclusión mutua: solo una ficha puede ocupar una casilla a la vez.
+3. Implementar la lógica de "comer ficha": si una ficha intenta moverse a una
+   casilla ocupada por un rival, enviar el hilo rival de regreso a la base.
+4. Implementar semáforos (sem_t) para limitar el acceso a la Zona de Meta y
+   los Pasillos Estrechos, evitando congestión y bloqueos.
+5. Identificar y proteger todas las secciones críticas del movimiento de fichas
+   (operación no atómica) para evitar condiciones de carrera e interbloqueos.
+6. Implementar la liberación correcta de todos los recursos de sincronización
+   (mutex, semáforos, memoria compartida) al finalizar el programa.
+
+INFORME TÉCNICO:
+- Explicación de cómo se evitó el Interbloqueo (Deadlock): estrategia usada
+  (orden de adquisición de locks, detección, prevención, etc.).
+
+
+========================================================
+ESTUDIANTE C — Comunicación IPC, Sockets y Visualización
+Puntos de rúbrica cubiertos: ~30 pts
+========================================================
+
+CÓDIGO:
+1. Implementar Sockets para que el Árbitro (proceso padre) se comunique con
+   los jugadores (procesos hijos): envío de mensajes de control y turnos.
+2. Implementar Colas de Mensajes (msgget, msgsnd, msgrcv) para enviar eventos
+   del juego entre jugadores: notificaciones de fichas comidas, movimientos
+   especiales, etc.
+3. Implementar Pipes para comunicación directa entre el proceso padre y sus
+   hijos, especialmente para la recolección de estadísticas y resultados
+   al final de la partida.
+4. Diseñar e implementar la visualización del tablero en la terminal usando
+   ASCII Art, mostrando el avance de las fichas de los 4 jugadores en
+   tiempo real durante la partida.
+
+INFORME TÉCNICO:
+- Descripción de los mecanismos de comunicación utilizados (sockets, colas
+  de mensajes, pipes) y por qué se eligió cada uno para su caso de uso.
+
+
+========================================================
+ENTREGABLES FINALES (todos los integrantes revisan y consolidan)
+========================================================
+- Código fuente completo en C estándar.
+- Makefile funcional.
+- Informe técnico con las secciones descritas arriba.
+- Todo empaquetado en un único archivo ZIP para subir al aula virtual.
