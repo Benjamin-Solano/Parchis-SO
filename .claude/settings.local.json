@@ -5,7 +5,15 @@
       "Bash(python -c ' *)",
       "Bash(python3 -c ' *)",
       "Bash(make)",
-      "Bash(make clean *)"
+      "Bash(make clean *)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\benja\\\\Documents\\\\GitHub\\\\Parchis-SO\" -Recurse -Force)",
+      "Bash(Select-Object -Property FullName, PSIsContainer)",
+      "Bash(Sort-Object FullName)",
+      "Bash(gcc --version)",
+      "Bash(gcc -Wall -Wextra -pedantic -g -pthread -Iinclude -c src/tablero.c -o obj/tablero.o)",
+      "Bash(wsl --status)",
+      "Bash(wsl gcc *)",
+      "Bash(wsl -e gcc --version)"
     ]
   }
 }

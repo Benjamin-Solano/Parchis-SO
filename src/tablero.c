@@ -172,10 +172,7 @@ int tablero_pos_salida(int jugador)
 int tablero_pos_pasillo_entrada(int jugador)
 {
     const int entradas[NUM_JUGADORES] = {
-        PASILLO_ROJO - 68,
-        PASILLO_VERDE - 68,
-        PASILLO_AZUL - 68,
-        PASILLO_AMARILLO - 68
+        SALIDA_ROJO - 1, SALIDA_VERDE - 1, SALIDA_AZUL - 1, SALIDA_AMARILLO - 1
     };
     return entradas[jugador];
 }
@@ -207,9 +204,41 @@ int tablero_mover_ficha(Tablero *t, int jugador, int ficha, int pasos)
     }
 
     if (f->estado == EN_TABLERO) {
-        int nueva_pos = (f->posicion + pasos) % NUM_CASILLAS;
+        const int entradas_pasillo[NUM_JUGADORES] = {
+            SALIDA_ROJO - 1, SALIDA_VERDE - 1, SALIDA_AZUL - 1, SALIDA_AMARILLO - 1
+        };
+        int entrada = entradas_pasillo[jugador];
+        int pasos_hasta_entrada = (entrada - f->posicion + NUM_CASILLAS) % NUM_CASILLAS;
 
-        /* TODO: detectar si entra al pasillo */
+        if (pasos_hasta_entrada < pasos) {
+            /* La ficha pasa por la entrada del pasillo y entra en él */
+            int pasos_en_pasillo = pasos - pasos_hasta_entrada;
+
+            pthread_mutex_lock(&t->mutex_casillas[f->posicion]);
+            t->casillas[f->posicion].ocupante_jugador = -1;
+            t->casillas[f->posicion].ocupante_ficha   = -1;
+            pthread_mutex_unlock(&t->mutex_casillas[f->posicion]);
+
+            if (pasos_en_pasillo >= NUM_CASILLAS_PASILLO) {
+                f->estado   = EN_META;
+                f->posicion = 0;
+                t->stats[jugador].fichas_en_meta++;
+                sem_wait(&t->sem_meta[jugador]);
+                return 1;
+            }
+
+            sem_wait(&t->sem_pasillo[jugador]);
+            f->estado   = EN_PASILLO;
+            f->posicion = pasos_en_pasillo;
+            pthread_mutex_lock(&t->mutex_pasillos[jugador][f->posicion]);
+            t->pasillos[jugador][f->posicion].ocupante_jugador = jugador;
+            t->pasillos[jugador][f->posicion].ocupante_ficha   = ficha;
+            pthread_mutex_unlock(&t->mutex_pasillos[jugador][f->posicion]);
+            sem_post(&t->sem_pasillo[jugador]);
+            return 1;
+        }
+
+        int nueva_pos = (f->posicion + pasos) % NUM_CASILLAS;
 
         pthread_mutex_lock(&t->mutex_casillas[f->posicion]);
         t->casillas[f->posicion].ocupante_jugador = -1;
