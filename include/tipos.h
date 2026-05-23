@@ -56,6 +56,7 @@ typedef struct {
 typedef struct {
     int  ocupante_jugador;   /* -1 si libre */
     int  ocupante_ficha;     /* -1 si libre */
+    int  num_fichas;         /* fichas del ocupante actualmente en esta casilla */
     int  es_segura;
 } Casilla;
 
@@ -96,6 +97,12 @@ typedef struct {
     int      jugador_id;
     int      ficha_id;
     Tablero *tablero;
+    int      msqid;
+    sem_t    sem_mover;   /* jugador_proceso -> hilo: ejecuta el movimiento */
+    sem_t    sem_listo;   /* hilo -> jugador_proceso: movimiento completado  */
+    int      dado;
+    int      resultado;   /* valor de retorno de tablero_mover_ficha */
+    int      terminado;   /* bandera de salida del bucle del hilo */
 } ArgsHilo;
 
 /* ── Mensaje IPC entre procesos ── */

@@ -72,7 +72,7 @@ int main(void)
             /* Registrar PID en tablero compartido */
             tablero->pids[i] = getpid();
 
-            jugador_proceso(i, tablero, socket_pares[i][1]);
+            jugador_proceso(i, tablero, socket_pares[i][1], msqid);
 
             /* Enviar estadísticas al padre via pipe */
             pipe_enviar_stats(pipes[i][1], i, &tablero->stats[i]);
@@ -91,7 +91,7 @@ int main(void)
     for (int i = 0; i < NUM_JUGADORES; i++)
         arbitro.socket_fds[i] = socket_pares[i][0];
 
-    vis_dibujar_tablero(tablero);
+    vis_dibujar_tablero(tablero, "Iniciando partida...");
     arbitro_loop(&arbitro, tablero, pids);
 
     /* ── 7. Recolectar estadísticas de los hijos ── */

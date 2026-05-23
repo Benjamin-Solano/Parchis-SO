@@ -1,10 +1,6 @@
 #include <stdio.h>
-#include <stdarg.h>
-#include <string.h>
 
 #include "../include/visualizacion.h"
-
-/* ── Helpers ── */
 
 const char *vis_color_jugador(int jugador_id)
 {
@@ -28,85 +24,33 @@ const char *vis_nombre_jugador(int jugador_id)
     }
 }
 
-/* ── Símbolo de ficha ── */
-static char simbolo_ficha(int jugador)
+void vis_dibujar_tablero(const Tablero *t, const char *evento)
 {
-    return "RVAZ"[jugador];
-}
-
-/* ── Tablero ASCII ──
-   Representación simplificada 11x11 del tablero de Parchís.
-   Las 68 casillas del camino exterior se mapean en una cuadrícula.
-   Las posiciones especiales (base, meta, pasillos) tienen celdas fijas.
-*/
-
-/* Mapa de posiciones del tablero al grid 15x15 */
-#define ROWS 15
-#define COLS 15
-
-/* Devuelve el contenido visible de una celda del grid */
-static void celda_contenido(const Tablero *t, int row, int col,
-                             char *out, int out_size)
-{
-    /* TODO: mapeo completo de posiciones → celdas.
-       Por ahora muestra un placeholder. */
-    (void)t; (void)row; (void)col;
-    snprintf(out, out_size, "   ");
-}
-
-void vis_dibujar_tablero(const Tablero *t)
-{
-    /* Limpiar terminal */
     printf("\033[2J\033[H");
-
     printf(ANSI_BOLD "══════════════════ PARCHÍS SO ══════════════════\n" ANSI_RESET);
-
-    /* Cabecera de jugadores */
-    for (int j = 0; j < NUM_JUGADORES; j++) {
-        printf("%s%-10s" ANSI_RESET, vis_color_jugador(j), vis_nombre_jugador(j));
-    }
-    printf("\n");
-
-    /* Contador de fichas por estado */
-    for (int j = 0; j < NUM_JUGADORES; j++) {
-        int base = 0, tablero_c = 0, pasillo = 0, meta = 0;
-        for (int f = 0; f < NUM_FICHAS; f++) {
-            switch (t->fichas[j][f].estado) {
-                case EN_BASE:    base++;     break;
-                case EN_TABLERO: tablero_c++;break;
-                case EN_PASILLO: pasillo++;  break;
-                case EN_META:    meta++;     break;
-            }
-        }
-        printf("%sB:%d T:%d P:%d M:%d  " ANSI_RESET,
-               vis_color_jugador(j), base, tablero_c, pasillo, meta);
-    }
-    printf("\n");
-
-    /* Tablero visual simplificado */
-    printf("\n");
-    printf("  +");
-    for (int c = 0; c < COLS; c++) printf("----+");
-    printf("\n");
-
-    for (int r = 0; r < ROWS; r++) {
-        printf("  |");
-        for (int c = 0; c < COLS; c++) {
-            char buf[8];
-            celda_contenido(t, r, c, buf, sizeof(buf));
-            printf("%s|", buf);
-        }
-        printf("\n  +");
-        for (int c = 0; c < COLS; c++) printf("----+");
-        printf("\n");
-    }
-
-    /* Turno actual */
-    printf("\nTurno: %s%s" ANSI_RESET "  |  Dado: %s%d" ANSI_RESET "\n",
+    printf("Turno: %s%-9s" ANSI_RESET "  Dado: " ANSI_BOLD "%d" ANSI_RESET "\n\n",
            vis_color_jugador(t->turno_actual),
            vis_nombre_jugador(t->turno_actual),
-           ANSI_BOLD, t->dado);
-    printf("────────────────────────────────────────────────\n");
+           t->dado);
+
+    for (int j = 0; j < NUM_JUGADORES; j++) {
+        const char *c = vis_color_jugador(j);
+        printf("  %s%-9s" ANSI_RESET, c, vis_nombre_jugador(j));
+        for (int f = 0; f < NUM_FICHAS; f++) {
+            const Ficha *fi = &t->fichas[j][f];
+            switch (fi->estado) {
+                case EN_BASE:    printf(" %s[ B ]%s", c, ANSI_RESET); break;
+                case EN_TABLERO: printf(" %s[%3d]%s", c, fi->posicion, ANSI_RESET); break;
+                case EN_PASILLO: printf(" %s[P%2d]%s", c, fi->posicion, ANSI_RESET); break;
+                case EN_META:    printf(" %s[ M ]%s", c, ANSI_RESET); break;
+            }
+        }
+        printf("  %d/4\n", t->stats[j].fichas_en_meta);
+    }
+
+    printf("\n  >> %s\n", (evento && evento[0]) ? evento : "-");
+    printf(ANSI_BOLD "════════════════════════════════════════════════\n" ANSI_RESET);
+    fflush(stdout);
 }
 
 void vis_mostrar_stats(const Tablero *t)
@@ -122,16 +66,6 @@ void vis_mostrar_stats(const Tablero *t)
                s->fichas_en_meta, s->fichas_comidas,
                s->fichas_perdidas, s->turnos_jugados);
     }
-}
-
-void vis_mostrar_evento(const char *fmt, ...)
-{
-    va_list ap;
-    va_start(ap, fmt);
-    printf("  >> ");
-    vprintf(fmt, ap);
-    printf("\n");
-    va_end(ap);
 }
 
 void vis_mostrar_ganador(int jugador_id)

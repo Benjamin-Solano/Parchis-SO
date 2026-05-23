@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <errno.h>
 #include <sys/socket.h>
 #include <sys/ipc.h>
 #include <sys/msg.h>
@@ -47,15 +48,21 @@ void socket_cerrar(int fd)
 
 int msgq_crear(void)
 {
-    int id = msgget((key_t)MSG_KEY, IPC_CREAT | 0666);
+    /* Eliminar cola residual de ejecuciones anteriores con la misma key */
+    int vieja = msgget((key_t)MSG_KEY, 0);
+    if (vieja >= 0)
+        msgctl(vieja, IPC_RMID, NULL);
+
+    int id = msgget((key_t)MSG_KEY, IPC_CREAT | IPC_EXCL | 0666);
     if (id < 0) perror("msgget");
     return id;
 }
 
 void msgq_enviar(int msqid, const MensajeIPC *msg)
 {
-    if (msgsnd(msqid, msg, sizeof(MensajeIPC) - sizeof(long), 0) < 0)
-        perror("msgsnd");
+    if (msgsnd(msqid, msg, sizeof(MensajeIPC) - sizeof(long), IPC_NOWAIT) < 0)
+        if (errno != EAGAIN)
+            perror("msgsnd");
 }
 
 int msgq_recibir(int msqid, MensajeIPC *msg, long tipo)

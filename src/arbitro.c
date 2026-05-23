@@ -71,31 +71,43 @@ void arbitro_loop(Arbitro *a, Tablero *t, pid_t pids[NUM_JUGADORES])
     (void)pids;
 
     while (!t->partida_terminada) {
+        /* Seleccionar jugador y leer su quantum antes de soltar el mutex */
         pthread_mutex_lock(&t->mutex_turno);
         int jugador = arbitro_siguiente_turno(a, t);
-        int dado    = arbitro_lanzar_dado();
-
-        pthread_mutex_lock(&t->mutex_dado);
-        t->dado          = dado;
-        t->turno_actual  = jugador;
-        pthread_mutex_unlock(&t->mutex_dado);
+        int q       = a->quantum[jugador];
         pthread_mutex_unlock(&t->mutex_turno);
 
-        arbitro_enviar_turno(a, jugador);
+        /* El jugador juega su quantum base; turnos_pendientes crece si saca 6 o come */
+        int turnos_pendientes = q;
+        while (turnos_pendientes > 0 && !t->partida_terminada) {
+            turnos_pendientes--;
 
-        /* Esperar señal de "turno completado" del jugador */
-        MensajeIPC respuesta;
-        socket_recibir(a->socket_fds[jugador], &respuesta);
+            int dado = arbitro_lanzar_dado();
 
-        vis_dibujar_tablero(t);
+            pthread_mutex_lock(&t->mutex_dado);
+            t->dado         = dado;
+            t->turno_actual = jugador;
+            pthread_mutex_unlock(&t->mutex_dado);
 
-        /* Verificar ganador */
-        for (int j = 0; j < NUM_JUGADORES; j++) {
-            if (tablero_jugador_gano(t, j)) {
-                t->ganador           = j;
-                t->partida_terminada = 1;
-                break;
+            arbitro_enviar_turno(a, jugador);
+
+            MensajeIPC respuesta;
+            memset(&respuesta, 0, sizeof(respuesta));
+            socket_recibir(a->socket_fds[jugador], &respuesta);
+
+            vis_dibujar_tablero(t, respuesta.texto);
+
+            for (int j = 0; j < NUM_JUGADORES; j++) {
+                if (tablero_jugador_gano(t, j)) {
+                    t->ganador           = j;
+                    t->partida_terminada = 1;
+                    break;
+                }
             }
+
+            /* Turno extra por sacar 6 o por comer ficha rival */
+            if (!t->partida_terminada && (dado == 6 || respuesta.dato == 1))
+                turnos_pendientes++;
         }
     }
 

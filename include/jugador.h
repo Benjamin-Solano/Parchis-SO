@@ -4,7 +4,7 @@
 #include "tipos.h"
 
 /* Punto de entrada del proceso hijo (jugador) */
-void jugador_proceso(int jugador_id, Tablero *t, int socket_fd);
+void jugador_proceso(int jugador_id, Tablero *t, int socket_fd, int msqid);
 
 /* Lógica de decisión: qué ficha mover dado un resultado de dado */
 int  jugador_elegir_ficha(Tablero *t, int jugador_id, int dado);

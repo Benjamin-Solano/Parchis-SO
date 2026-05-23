@@ -150,7 +150,7 @@ void tablero_init_sync(Tablero *t)
 
 int tablero_casilla_libre(Tablero *t, int posicion)
 {
-    return t->casillas[posicion].ocupante_jugador == -1;
+    return t->casillas[posicion].num_fichas == 0;
 }
 
 int tablero_casilla_segura(int posicion)
@@ -197,6 +197,7 @@ int tablero_mover_ficha(Tablero *t, int jugador, int ficha, int pasos)
         }
         f->estado   = EN_TABLERO;
         f->posicion = salida;
+        t->casillas[salida].num_fichas++;
         t->casillas[salida].ocupante_jugador = jugador;
         t->casillas[salida].ocupante_ficha   = ficha;
         pthread_mutex_unlock(&t->mutex_casillas[salida]);
@@ -215,8 +216,11 @@ int tablero_mover_ficha(Tablero *t, int jugador, int ficha, int pasos)
             int pasos_en_pasillo = pasos - pasos_hasta_entrada;
 
             pthread_mutex_lock(&t->mutex_casillas[f->posicion]);
-            t->casillas[f->posicion].ocupante_jugador = -1;
-            t->casillas[f->posicion].ocupante_ficha   = -1;
+            t->casillas[f->posicion].num_fichas--;
+            if (t->casillas[f->posicion].num_fichas == 0) {
+                t->casillas[f->posicion].ocupante_jugador = -1;
+                t->casillas[f->posicion].ocupante_ficha   = -1;
+            }
             pthread_mutex_unlock(&t->mutex_casillas[f->posicion]);
 
             if (pasos_en_pasillo >= NUM_CASILLAS_PASILLO) {
@@ -241,8 +245,11 @@ int tablero_mover_ficha(Tablero *t, int jugador, int ficha, int pasos)
         int nueva_pos = (f->posicion + pasos) % NUM_CASILLAS;
 
         pthread_mutex_lock(&t->mutex_casillas[f->posicion]);
-        t->casillas[f->posicion].ocupante_jugador = -1;
-        t->casillas[f->posicion].ocupante_ficha   = -1;
+        t->casillas[f->posicion].num_fichas--;
+        if (t->casillas[f->posicion].num_fichas == 0) {
+            t->casillas[f->posicion].ocupante_jugador = -1;
+            t->casillas[f->posicion].ocupante_ficha   = -1;
+        }
         pthread_mutex_unlock(&t->mutex_casillas[f->posicion]);
 
         pthread_mutex_lock(&t->mutex_casillas[nueva_pos]);
@@ -252,6 +259,7 @@ int tablero_mover_ficha(Tablero *t, int jugador, int ficha, int pasos)
             tablero_comer_ficha(t, jugador, nueva_pos);
         }
         f->posicion = nueva_pos;
+        t->casillas[nueva_pos].num_fichas++;
         t->casillas[nueva_pos].ocupante_jugador = jugador;
         t->casillas[nueva_pos].ocupante_ficha   = ficha;
         pthread_mutex_unlock(&t->mutex_casillas[nueva_pos]);
@@ -295,16 +303,22 @@ int tablero_mover_ficha(Tablero *t, int jugador, int ficha, int pasos)
 void tablero_comer_ficha(Tablero *t, int jugador_atacante, int posicion)
 {
     int j_rival = t->casillas[posicion].ocupante_jugador;
-    int f_rival = t->casillas[posicion].ocupante_ficha;
-    if (j_rival < 0) return;
+    if (j_rival < 0 || j_rival == jugador_atacante) return;
 
-    t->fichas[j_rival][f_rival].estado   = EN_BASE;
-    t->fichas[j_rival][f_rival].posicion = 0;
+    /* Enviar a la base todas las fichas del rival en esa casilla */
+    for (int f = 0; f < NUM_FICHAS; f++) {
+        if (t->fichas[j_rival][f].estado   == EN_TABLERO &&
+            t->fichas[j_rival][f].posicion == posicion) {
+            t->fichas[j_rival][f].estado   = EN_BASE;
+            t->fichas[j_rival][f].posicion = 0;
+            t->stats[jugador_atacante].fichas_comidas++;
+            t->stats[j_rival].fichas_perdidas++;
+        }
+    }
+
     t->casillas[posicion].ocupante_jugador = -1;
     t->casillas[posicion].ocupante_ficha   = -1;
-
-    t->stats[jugador_atacante].fichas_comidas++;
-    t->stats[j_rival].fichas_perdidas++;
+    t->casillas[posicion].num_fichas       = 0;
 }
 
 int tablero_jugador_gano(Tablero *t, int jugador)

@@ -3,14 +3,11 @@
 
 #include "tipos.h"
 
-/* Limpia la terminal y dibuja el tablero completo */
-void vis_dibujar_tablero(const Tablero *t);
+/* Limpia la terminal, dibuja el tablero y muestra el último evento */
+void vis_dibujar_tablero(const Tablero *t, const char *evento);
 
 /* Muestra el marcador de estadísticas */
 void vis_mostrar_stats(const Tablero *t);
-
-/* Muestra un evento puntual (ficha comida, llega a meta, etc.) */
-void vis_mostrar_evento(const char *fmt, ...);
 
 /* Muestra el resultado final */
 void vis_mostrar_ganador(int jugador_id);

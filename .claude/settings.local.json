@@ -13,7 +13,13 @@
       "Bash(gcc -Wall -Wextra -pedantic -g -pthread -Iinclude -c src/tablero.c -o obj/tablero.o)",
       "Bash(wsl --status)",
       "Bash(wsl gcc *)",
-      "Bash(wsl -e gcc --version)"
+      "Bash(wsl -e gcc --version)",
+      "Bash(ipcs -q)",
+      "Bash(grep -v \"^[^a-zA-ZáéíóúñÁÉÍÓÚÑ]*$\")",
+      "Bash(grep -E \".{20,}\")",
+      "Bash(pip install *)",
+      "Bash(pip3 install *)",
+      "Bash(python3 -m pip install python-docx -q)"
     ]
   }
 }
