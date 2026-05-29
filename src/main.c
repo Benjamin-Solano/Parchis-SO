@@ -88,17 +88,26 @@ int main(void)
     /* ── 6. Proceso padre: actúa como Árbitro ── */
     Arbitro arbitro;
     arbitro_init(&arbitro);
+    arbitro.msqid = msqid;                 /* el árbitro consume la cola de eventos */
     for (int i = 0; i < NUM_JUGADORES; i++)
         arbitro.socket_fds[i] = socket_pares[i][0];
 
     vis_dibujar_tablero(tablero, "Iniciando partida...");
     arbitro_loop(&arbitro, tablero, pids);
 
-    /* ── 7. Recolectar estadísticas de los hijos ── */
+    /* ── 7. Recolectar estadísticas de los hijos ──
+       CORRECCIÓN: antes se indexaba stats_finales[jugador_id] con jugador_id
+       SIN inicializar (se evaluaba la dirección antes de que la función lo
+       escribiera) -> escritura fuera de rango -> SIGSEGV. Ahora se lee en un
+       temporal y luego se asigna con el índice ya válido. */
     EstadisticasJugador stats_finales[NUM_JUGADORES];
-    int jugador_id;
     for (int i = 0; i < NUM_JUGADORES; i++) {
-        pipe_recibir_stats(pipes[i][0], &jugador_id, &stats_finales[jugador_id]);
+        int jugador_id = -1;
+        EstadisticasJugador tmp;
+        if (pipe_recibir_stats(pipes[i][0], &jugador_id, &tmp) == 0 &&
+            jugador_id >= 0 && jugador_id < NUM_JUGADORES) {
+            stats_finales[jugador_id] = tmp;
+        }
         close(pipes[i][0]);
     }
 
@@ -106,8 +115,20 @@ int main(void)
     for (int i = 0; i < NUM_JUGADORES; i++)
         waitpid(pids[i], NULL, 0);
 
-    /* ── 9. Mostrar resultados y liberar recursos ── */
-    vis_mostrar_stats(tablero);
+    /* ── 9. Mostrar resultados y liberar recursos ──
+       El marcador se construye con los datos recolectados por los PIPES
+       (no desde memoria compartida): así el mecanismo pipe queda usado
+       de extremo a extremo, como pide el rubro. */
+    printf("\n=== ESTADISTICAS FINALES (recolectadas por pipe) ===\n");
+    printf("%-12s %8s %10s %10s %8s\n",
+           "Jugador", "En meta", "Comidas", "Perdidas", "Turnos");
+    for (int j = 0; j < NUM_JUGADORES; j++) {
+        const EstadisticasJugador *s = &stats_finales[j];
+        printf("%-12s %8d %10d %10d %8d\n",
+               vis_nombre_jugador(j),
+               s->fichas_en_meta, s->fichas_comidas,
+               s->fichas_perdidas, s->turnos_jugados);
+    }
     vis_mostrar_ganador(tablero->ganador);
 
     msgq_destruir(msqid);

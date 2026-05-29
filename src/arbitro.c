@@ -2,7 +2,10 @@
 #include <stdlib.h>
 #include <time.h>
 #include <unistd.h>
+#include <errno.h>
 #include <sys/wait.h>
+#include <sys/ipc.h>
+#include <sys/msg.h>
 #include <string.h>
 
 #include "../include/arbitro.h"
@@ -22,7 +25,9 @@ void arbitro_init(Arbitro *a)
         a->quantum[i]    = QUANTUM_BASE;
         a->socket_fds[i] = -1;
     }
-    a->indice_actual = 0;
+    a->indice_actual      = 0;
+    a->msqid              = -1;
+    a->eventos_consumidos = 0;
 }
 
 /* ── Round Robin con prioridades dinámicas opcionales ── */
@@ -66,6 +71,23 @@ void arbitro_recibir_stats(Arbitro *a, Tablero *t)
     /* Las estadísticas llegan por pipes al finalizar — ver main.c */
 }
 
+/* ── CONSUMIDOR de la cola de eventos ──
+   Vacía de forma NO bloqueante (IPC_NOWAIT) todos los eventos que los
+   hilos-ficha (productores) hayan depositado. Esto cierra el patrón
+   productor-consumidor: antes la cola se llenaba y nunca se leía. */
+void arbitro_drenar_eventos(Arbitro *a)
+{
+    if (a->msqid < 0) return;
+
+    MensajeIPC ev;
+    while (msgrcv(a->msqid, &ev,
+                  sizeof(MensajeIPC) - sizeof(long),
+                  0 /* cualquier tipo */, IPC_NOWAIT) >= 0) {
+        a->eventos_consumidos++;
+    }
+    /* msgrcv sale del bucle con -1 y errno=ENOMSG cuando la cola queda vacía */
+}
+
 void arbitro_loop(Arbitro *a, Tablero *t, pid_t pids[NUM_JUGADORES])
 {
     (void)pids;
@@ -95,6 +117,9 @@ void arbitro_loop(Arbitro *a, Tablero *t, pid_t pids[NUM_JUGADORES])
             memset(&respuesta, 0, sizeof(respuesta));
             socket_recibir(a->socket_fds[jugador], &respuesta);
 
+            /* Consumir los eventos que el movimiento haya generado en la cola */
+            arbitro_drenar_eventos(a);
+
             vis_dibujar_tablero(t, respuesta.texto);
 
             for (int j = 0; j < NUM_JUGADORES; j++) {
@@ -111,6 +136,9 @@ void arbitro_loop(Arbitro *a, Tablero *t, pid_t pids[NUM_JUGADORES])
         }
     }
 
+    /* Drenado final por si quedaron eventos en vuelo */
+    arbitro_drenar_eventos(a);
+
     /* Notificar fin a todos los jugadores */
     for (int j = 0; j < NUM_JUGADORES; j++) {
         MensajeIPC fin;
@@ -118,4 +146,7 @@ void arbitro_loop(Arbitro *a, Tablero *t, pid_t pids[NUM_JUGADORES])
         fin.tipo = MSG_TIPO_FIN;
         socket_enviar(a->socket_fds[j], &fin);
     }
+
+    printf("\nEventos IPC consumidos de la cola de mensajes: %ld\n",
+           a->eventos_consumidos);
 }

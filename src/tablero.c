@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
 #include <sys/mman.h>
@@ -33,7 +34,6 @@ Tablero *tablero_crear(void)
 
 Tablero *tablero_obtener(int shmid)
 {
-    /* Reservado para uso con shmget si se prefiere */
     (void)shmid;
     return NULL;
 }
@@ -43,11 +43,9 @@ void tablero_destruir(Tablero *t, int shmid)
     (void)shmid;
     if (!t) return;
 
-    /* Destruir mutex de casillas */
     for (int i = 0; i < NUM_CASILLAS; i++)
         pthread_mutex_destroy(&t->mutex_casillas[i]);
 
-    /* Destruir mutex de pasillos */
     for (int j = 0; j < NUM_JUGADORES; j++)
         for (int i = 0; i < NUM_CASILLAS_PASILLO; i++)
             pthread_mutex_destroy(&t->mutex_pasillos[j][i]);
@@ -71,31 +69,28 @@ void tablero_init(Tablero *t)
 {
     memset(t, 0, sizeof(Tablero));
 
-    /* Casillas vacías */
     for (int i = 0; i < NUM_CASILLAS; i++) {
         t->casillas[i].ocupante_jugador = -1;
         t->casillas[i].ocupante_ficha   = -1;
         t->casillas[i].es_segura        = 0;
     }
 
-    /* Marcar casillas seguras */
     for (int i = 0; i < NUM_CASILLAS_SEGURAS; i++) {
         int idx = CASILLAS_SEGURAS[i];
         if (idx >= 0 && idx < NUM_CASILLAS)
             t->casillas[idx].es_segura = 1;
     }
 
-    /* Pasillos vacíos */
     for (int j = 0; j < NUM_JUGADORES; j++)
         for (int i = 0; i < NUM_CASILLAS_PASILLO; i++) {
             t->pasillos[j][i].ocupante_jugador = -1;
             t->pasillos[j][i].ocupante_ficha   = -1;
         }
 
-    t->turno_actual    = ROJO;
-    t->dado            = 0;
+    t->turno_actual      = ROJO;
+    t->dado              = 0;
     t->partida_terminada = 0;
-    t->ganador         = -1;
+    t->ganador           = -1;
 
     tablero_init_fichas(t);
     tablero_init_sync(t);
@@ -134,13 +129,11 @@ void tablero_init_sync(Tablero *t)
     pthread_mutex_init(&t->mutex_turno, &attr);
     pthread_mutexattr_destroy(&attr);
 
-    sem_t *s;
     for (int j = 0; j < NUM_JUGADORES; j++) {
-        /* Meta: máximo 4 fichas simultáneas (una por ficha del jugador) */
+        /* Meta: contador de plazas libres (4). Se reserva una plaza al entrar. */
         sem_init(&t->sem_meta[j], 1, NUM_FICHAS);
-        /* Pasillo: máximo 1 ficha a la vez en casillas estrechas */
+        /* Pasillo estrecho: capacidad 1. Se RETIENE mientras la ficha está dentro. */
         sem_init(&t->sem_pasillo[j], 1, 1);
-        (void)s;
     }
 }
 
@@ -177,6 +170,19 @@ int tablero_pos_pasillo_entrada(int jugador)
     return entradas[jugador];
 }
 
+/* Saca una ficha de su casilla del tablero (sección crítica de esa casilla) */
+static void liberar_casilla(Tablero *t, int posicion)
+{
+    pthread_mutex_lock(&t->mutex_casillas[posicion]);
+    t->casillas[posicion].num_fichas--;
+    if (t->casillas[posicion].num_fichas <= 0) {
+        t->casillas[posicion].num_fichas      = 0;
+        t->casillas[posicion].ocupante_jugador = -1;
+        t->casillas[posicion].ocupante_ficha   = -1;
+    }
+    pthread_mutex_unlock(&t->mutex_casillas[posicion]);
+}
+
 int tablero_mover_ficha(Tablero *t, int jugador, int ficha, int pasos)
 {
     Ficha *f = &t->fichas[jugador][ficha];
@@ -184,8 +190,8 @@ int tablero_mover_ficha(Tablero *t, int jugador, int ficha, int pasos)
     if (f->estado == EN_META)
         return 0;
 
+    /* ── Salir de la base (solo con 5) ── */
     if (f->estado == EN_BASE) {
-        /* Solo sale con 5 */
         if (pasos != 5)
             return 0;
         int salida = tablero_pos_salida(jugador);
@@ -204,6 +210,7 @@ int tablero_mover_ficha(Tablero *t, int jugador, int ficha, int pasos)
         return 1;
     }
 
+    /* ── Movimiento en el anillo ── */
     if (f->estado == EN_TABLERO) {
         const int entradas_pasillo[NUM_JUGADORES] = {
             SALIDA_ROJO - 1, SALIDA_VERDE - 1, SALIDA_AZUL - 1, SALIDA_AMARILLO - 1
@@ -212,45 +219,39 @@ int tablero_mover_ficha(Tablero *t, int jugador, int ficha, int pasos)
         int pasos_hasta_entrada = (entrada - f->posicion + NUM_CASILLAS) % NUM_CASILLAS;
 
         if (pasos_hasta_entrada < pasos) {
-            /* La ficha pasa por la entrada del pasillo y entra en él */
             int pasos_en_pasillo = pasos - pasos_hasta_entrada;
 
-            pthread_mutex_lock(&t->mutex_casillas[f->posicion]);
-            t->casillas[f->posicion].num_fichas--;
-            if (t->casillas[f->posicion].num_fichas == 0) {
-                t->casillas[f->posicion].ocupante_jugador = -1;
-                t->casillas[f->posicion].ocupante_ficha   = -1;
-            }
-            pthread_mutex_unlock(&t->mutex_casillas[f->posicion]);
-
+            /* (a) La ficha rebasa el pasillo y entra directo a la meta */
             if (pasos_en_pasillo >= NUM_CASILLAS_PASILLO) {
+                sem_wait(&t->sem_meta[jugador]);   /* reservar plaza en meta */
+                liberar_casilla(t, f->posicion);
                 f->estado   = EN_META;
                 f->posicion = 0;
                 t->stats[jugador].fichas_en_meta++;
-                sem_wait(&t->sem_meta[jugador]);
                 return 1;
             }
 
-            sem_wait(&t->sem_pasillo[jugador]);
+            /* (b) Intenta entrar al pasillo (capacidad 1, NO bloqueante).
+                   Si ya hay una ficha dentro, no puede entrar: turno sin
+                   movimiento. Usar trywait evita interbloqueo en la
+                   arquitectura serializada. */
+            if (sem_trywait(&t->sem_pasillo[jugador]) != 0)
+                return 0;
+
+            liberar_casilla(t, f->posicion);
             f->estado   = EN_PASILLO;
             f->posicion = pasos_en_pasillo;
             pthread_mutex_lock(&t->mutex_pasillos[jugador][f->posicion]);
             t->pasillos[jugador][f->posicion].ocupante_jugador = jugador;
             t->pasillos[jugador][f->posicion].ocupante_ficha   = ficha;
             pthread_mutex_unlock(&t->mutex_pasillos[jugador][f->posicion]);
-            sem_post(&t->sem_pasillo[jugador]);
+            /* NO se hace sem_post: la ficha RETIENE el pasillo mientras está dentro */
             return 1;
         }
 
+        /* (c) Avance normal en el anillo */
         int nueva_pos = (f->posicion + pasos) % NUM_CASILLAS;
-
-        pthread_mutex_lock(&t->mutex_casillas[f->posicion]);
-        t->casillas[f->posicion].num_fichas--;
-        if (t->casillas[f->posicion].num_fichas == 0) {
-            t->casillas[f->posicion].ocupante_jugador = -1;
-            t->casillas[f->posicion].ocupante_ficha   = -1;
-        }
-        pthread_mutex_unlock(&t->mutex_casillas[f->posicion]);
+        liberar_casilla(t, f->posicion);
 
         pthread_mutex_lock(&t->mutex_casillas[nueva_pos]);
         if (!tablero_casilla_libre(t, nueva_pos) &&
@@ -266,23 +267,26 @@ int tablero_mover_ficha(Tablero *t, int jugador, int ficha, int pasos)
         return 1;
     }
 
+    /* ── Movimiento dentro del pasillo (la ficha YA retiene sem_pasillo) ── */
     if (f->estado == EN_PASILLO) {
-        sem_wait(&t->sem_pasillo[jugador]);
         int nueva_pos = f->posicion + pasos;
+
+        /* Llega a la meta: libera el pasillo y reserva plaza en meta */
         if (nueva_pos >= NUM_CASILLAS_PASILLO) {
-            /* Llega a la meta */
             pthread_mutex_lock(&t->mutex_pasillos[jugador][f->posicion]);
             t->pasillos[jugador][f->posicion].ocupante_jugador = -1;
             t->pasillos[jugador][f->posicion].ocupante_ficha   = -1;
             pthread_mutex_unlock(&t->mutex_pasillos[jugador][f->posicion]);
 
+            sem_post(&t->sem_pasillo[jugador]);   /* libera el pasillo estrecho */
+            sem_wait(&t->sem_meta[jugador]);      /* reserva plaza en meta      */
             f->estado   = EN_META;
             f->posicion = 0;
             t->stats[jugador].fichas_en_meta++;
-            sem_post(&t->sem_pasillo[jugador]);
-            sem_wait(&t->sem_meta[jugador]);
             return 1;
         }
+
+        /* Avance dentro del pasillo: no toca el semáforo (lo sigue reteniendo) */
         pthread_mutex_lock(&t->mutex_pasillos[jugador][f->posicion]);
         t->pasillos[jugador][f->posicion].ocupante_jugador = -1;
         t->pasillos[jugador][f->posicion].ocupante_ficha   = -1;
@@ -293,7 +297,6 @@ int tablero_mover_ficha(Tablero *t, int jugador, int ficha, int pasos)
         t->pasillos[jugador][nueva_pos].ocupante_jugador = jugador;
         t->pasillos[jugador][nueva_pos].ocupante_ficha   = ficha;
         pthread_mutex_unlock(&t->mutex_pasillos[jugador][nueva_pos]);
-        sem_post(&t->sem_pasillo[jugador]);
         return 1;
     }
 
@@ -305,7 +308,6 @@ void tablero_comer_ficha(Tablero *t, int jugador_atacante, int posicion)
     int j_rival = t->casillas[posicion].ocupante_jugador;
     if (j_rival < 0 || j_rival == jugador_atacante) return;
 
-    /* Enviar a la base todas las fichas del rival en esa casilla */
     for (int f = 0; f < NUM_FICHAS; f++) {
         if (t->fichas[j_rival][f].estado   == EN_TABLERO &&
             t->fichas[j_rival][f].posicion == posicion) {
@@ -319,6 +321,12 @@ void tablero_comer_ficha(Tablero *t, int jugador_atacante, int posicion)
     t->casillas[posicion].ocupante_jugador = -1;
     t->casillas[posicion].ocupante_ficha   = -1;
     t->casillas[posicion].num_fichas       = 0;
+}
+
+/* Faltaba su definición: estaba declarada en tablero.h pero no implementada */
+int tablero_ficha_llego_meta(Tablero *t, int jugador, int ficha)
+{
+    return t->fichas[jugador][ficha].estado == EN_META;
 }
 
 int tablero_jugador_gano(Tablero *t, int jugador)
