@@ -25,4 +25,4 @@ int  tablero_jugador_gano(Tablero *t, int jugador);
 int  tablero_pos_salida(int jugador);
 int  tablero_pos_pasillo_entrada(int jugador);
 
-#endif /* TABLERO_H */
+#endif

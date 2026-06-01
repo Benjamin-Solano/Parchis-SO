@@ -20,4 +20,4 @@ int  pipe_crear(int fds[2]);
 void pipe_enviar_stats(int fd, int jugador_id, const EstadisticasJugador *stats);
 int  pipe_recibir_stats(int fd, int *jugador_id, EstadisticasJugador *stats);
 
-#endif /* IPC_H */
+#endif

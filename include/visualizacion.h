@@ -23,4 +23,4 @@ const char *vis_nombre_jugador(int jugador_id);
 #define ANSI_AZUL   "\033[34m"
 #define ANSI_AMARILLO "\033[33m"
 
-#endif /* VISUALIZACION_H */
+#endif

@@ -18,9 +18,6 @@ const int CASILLAS_SEGURAS[NUM_CASILLAS_SEGURAS] = {
     4, 21, 38, 55
 };
 
-/* ────────────────────────────────────────────
-   Memoria compartida
-   ──────────────────────────────────────────── */
 
 Tablero *tablero_crear(void)
 {
@@ -61,9 +58,6 @@ void tablero_destruir(Tablero *t, int shmid)
     munmap(t, sizeof(Tablero));
 }
 
-/* ────────────────────────────────────────────
-   Inicialización
-   ──────────────────────────────────────────── */
 
 void tablero_init(Tablero *t)
 {
@@ -130,16 +124,13 @@ void tablero_init_sync(Tablero *t)
     pthread_mutexattr_destroy(&attr);
 
     for (int j = 0; j < NUM_JUGADORES; j++) {
-        /* Meta: contador de plazas libres (4). Se reserva una plaza al entrar. */
+
         sem_init(&t->sem_meta[j], 1, NUM_FICHAS);
-        /* Pasillo estrecho: capacidad 1. Se RETIENE mientras la ficha está dentro. */
+
         sem_init(&t->sem_pasillo[j], 1, 1);
     }
 }
 
-/* ────────────────────────────────────────────
-   Lógica del tablero
-   ──────────────────────────────────────────── */
 
 int tablero_casilla_libre(Tablero *t, int posicion)
 {
@@ -221,9 +212,9 @@ int tablero_mover_ficha(Tablero *t, int jugador, int ficha, int pasos)
         if (pasos_hasta_entrada < pasos) {
             int pasos_en_pasillo = pasos - pasos_hasta_entrada;
 
-            /* (a) La ficha rebasa el pasillo y entra directo a la meta */
+
             if (pasos_en_pasillo >= NUM_CASILLAS_PASILLO) {
-                sem_wait(&t->sem_meta[jugador]);   /* reservar plaza en meta */
+                sem_wait(&t->sem_meta[jugador]); 
                 liberar_casilla(t, f->posicion);
                 f->estado   = EN_META;
                 f->posicion = 0;
@@ -231,10 +222,7 @@ int tablero_mover_ficha(Tablero *t, int jugador, int ficha, int pasos)
                 return 1;
             }
 
-            /* (b) Intenta entrar al pasillo (capacidad 1, NO bloqueante).
-                   Si ya hay una ficha dentro, no puede entrar: turno sin
-                   movimiento. Usar trywait evita interbloqueo en la
-                   arquitectura serializada. */
+
             if (sem_trywait(&t->sem_pasillo[jugador]) != 0)
                 return 0;
 
@@ -245,11 +233,9 @@ int tablero_mover_ficha(Tablero *t, int jugador, int ficha, int pasos)
             t->pasillos[jugador][f->posicion].ocupante_jugador = jugador;
             t->pasillos[jugador][f->posicion].ocupante_ficha   = ficha;
             pthread_mutex_unlock(&t->mutex_pasillos[jugador][f->posicion]);
-            /* NO se hace sem_post: la ficha RETIENE el pasillo mientras está dentro */
             return 1;
         }
 
-        /* (c) Avance normal en el anillo */
         int nueva_pos = (f->posicion + pasos) % NUM_CASILLAS;
         liberar_casilla(t, f->posicion);
 

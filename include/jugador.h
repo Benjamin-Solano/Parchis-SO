@@ -14,4 +14,4 @@ void jugador_notificar_evento(int msqid, int jugador_origen,
                               int jugador_destino, int dato,
                               const char *texto);
 
-#endif /* JUGADOR_H */
+#endif

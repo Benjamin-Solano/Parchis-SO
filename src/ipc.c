@@ -9,10 +9,6 @@
 
 #include "../include/ipc.h"
 
-/* ────────────────────────────────────────────
-   Sockets (socketpair — AF_UNIX)
-   ──────────────────────────────────────────── */
-
 int socket_crear_par(int fds[2])
 {
     return socketpair(AF_UNIX, SOCK_STREAM, 0, fds);
@@ -40,11 +36,8 @@ void socket_cerrar(int fd)
     close(fd);
 }
 
-/* ────────────────────────────────────────────
-   Colas de mensajes POSIX System V
-   ──────────────────────────────────────────── */
 
-#define MSG_KEY  0x50415243   /* "PARC" en hex */
+#define MSG_KEY  0x50415243 /* 'PARC' en ASCII */
 
 int msgq_crear(void)
 {
@@ -82,10 +75,6 @@ void msgq_destruir(int msqid)
     if (msgctl(msqid, IPC_RMID, NULL) < 0)
         perror("msgctl IPC_RMID");
 }
-
-/* ────────────────────────────────────────────
-   Pipes
-   ──────────────────────────────────────────── */
 
 typedef struct {
     int                jugador_id;

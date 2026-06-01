@@ -2,14 +2,6 @@
 
 #include "../include/visualizacion.h"
 
-/* ════════════════════════════════════════════════════════════════
-   MAPA ASCII EN CRUZ (tablero de Parchís) con colores por jugador.
-   La info de cada ficha (estado + posicion) ya vive en el tablero
-   compartido; esto es solo capa de presentación. El árbitro es el
-   ÚNICO proceso que llama a esta función, así que la salida a la
-   terminal (recurso compartido) tiene un solo escritor: no hay
-   intercalado y no se necesita lock sobre stdout.
-   ════════════════════════════════════════════════════════════════ */
 
 #define MAPA_H 18
 #define MAPA_W 18
@@ -125,7 +117,6 @@ void vis_dibujar_tablero(const Tablero *t, const char *evento)
         }
     }
 
-    /* 6) Rótulos de base: inicial + número de fichas en base */
     for (int j = 0; j < NUM_JUGADORES; j++) {
         int r = BASE_RC[j][0], c = BASE_RC[j][1];
         ch[r][c]   = INICIAL[j];      own[r][c]   = j;
@@ -149,7 +140,7 @@ void vis_dibujar_tablero(const Tablero *t, const char *evento)
         printf("\n");
     }
 
-    /* Leyenda compacta por jugador */
+
     printf("\n");
     for (int j = 0; j < NUM_JUGADORES; j++) {
         printf("  %s%-9s" ANSI_RESET " base:%d tablero:%d pasillo:%d meta:%d/4\n",

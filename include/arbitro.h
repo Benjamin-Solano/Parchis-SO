@@ -21,4 +21,4 @@ void arbitro_drenar_eventos(Arbitro *a);   /* consume la cola de mensajes (no bl
 void arbitro_loop(Arbitro *a, Tablero *t, pid_t pids[NUM_JUGADORES]);
 int  arbitro_lanzar_dado(void);
 
-#endif /* ARBITRO_H */
+#endif

@@ -30,7 +30,6 @@ int main(void)
         exit(EXIT_FAILURE);
     }
 
-    /* ── 3. Crear pipes (uno por jugador) para estadísticas ── */
     int pipes[NUM_JUGADORES][2];
     for (int i = 0; i < NUM_JUGADORES; i++) {
         if (pipe_crear(pipes[i]) < 0) {
@@ -39,7 +38,6 @@ int main(void)
         }
     }
 
-    /* ── 4. Crear sockets para comunicación árbitro <-> jugadores ── */
     int socket_pares[NUM_JUGADORES][2];
     for (int i = 0; i < NUM_JUGADORES; i++) {
         if (socket_crear_par(socket_pares[i]) < 0) {
@@ -48,7 +46,7 @@ int main(void)
         }
     }
 
-    /* ── 5. fork() — un proceso hijo por jugador ── */
+
     pid_t pids[NUM_JUGADORES];
     for (int i = 0; i < NUM_JUGADORES; i++) {
         pids[i] = fork();
@@ -59,7 +57,6 @@ int main(void)
         }
 
         if (pids[i] == 0) {
-            /* Proceso hijo: cerrar extremos que no usa */
             close(pipes[i][0]);
             for (int j = 0; j < NUM_JUGADORES; j++) {
                 if (j != i) {
@@ -67,7 +64,7 @@ int main(void)
                     close(socket_pares[j][0]);
                 }
             }
-            close(socket_pares[i][0]); /* hijo usa el extremo [1] */
+            close(socket_pares[i][0]);
 
             /* Registrar PID en tablero compartido */
             tablero->pids[i] = getpid();
@@ -80,26 +77,19 @@ int main(void)
             exit(EXIT_SUCCESS);
         }
 
-        /* Padre: cerrar extremos del hijo */
         close(socket_pares[i][1]);
         close(pipes[i][1]);
     }
 
-    /* ── 6. Proceso padre: actúa como Árbitro ── */
     Arbitro arbitro;
     arbitro_init(&arbitro);
-    arbitro.msqid = msqid;                 /* el árbitro consume la cola de eventos */
+    arbitro.msqid = msqid; 
     for (int i = 0; i < NUM_JUGADORES; i++)
         arbitro.socket_fds[i] = socket_pares[i][0];
 
     vis_dibujar_tablero(tablero, "Iniciando partida...");
     arbitro_loop(&arbitro, tablero, pids);
 
-    /* ── 7. Recolectar estadísticas de los hijos ──
-       CORRECCIÓN: antes se indexaba stats_finales[jugador_id] con jugador_id
-       SIN inicializar (se evaluaba la dirección antes de que la función lo
-       escribiera) -> escritura fuera de rango -> SIGSEGV. Ahora se lee en un
-       temporal y luego se asigna con el índice ya válido. */
     EstadisticasJugador stats_finales[NUM_JUGADORES];
     for (int i = 0; i < NUM_JUGADORES; i++) {
         int jugador_id = -1;
@@ -111,14 +101,9 @@ int main(void)
         close(pipes[i][0]);
     }
 
-    /* ── 8. wait() — esperar a todos los hijos ── */
     for (int i = 0; i < NUM_JUGADORES; i++)
         waitpid(pids[i], NULL, 0);
 
-    /* ── 9. Mostrar resultados y liberar recursos ──
-       El marcador se construye con los datos recolectados por los PIPES
-       (no desde memoria compartida): así el mecanismo pipe queda usado
-       de extremo a extremo, como pide el rubro. */
     printf("\n=== ESTADISTICAS FINALES (recolectadas por pipe) ===\n");
     printf("%-12s %8s %10s %10s %8s\n",
            "Jugador", "En meta", "Comidas", "Perdidas", "Turnos");

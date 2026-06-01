@@ -119,4 +119,4 @@ typedef struct {
     char texto[64];
 } MensajeIPC;
 
-#endif /* TIPOS_H */
+#endif

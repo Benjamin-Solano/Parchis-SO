@@ -35,7 +35,7 @@ int jugador_elegir_ficha(Tablero *t, int jugador_id, int dado)
        1. Ficha en pasillo (cualquiera; tablero_mover_ficha gestiona el ingreso a meta)
        2. Ficha en tablero con mayor progreso relativo a la salida
        3. Sacar ficha de la base si dado == 5
-       4. -1 si no hay movimiento posible                */
+       4. -1 si no hay movimiento posible */
 
     int mejor = -1;
 
@@ -145,13 +145,11 @@ void jugador_proceso(int jugador_id, Tablero *t, int socket_fd, int msqid)
                          vis_nombre_jugador(jugador_id), dado);
             }
 
-            /* Señalizar al árbitro si se comió una ficha rival */
             resp.dato = (t->stats[jugador_id].fichas_comidas > comidas_antes) ? 1 : 0;
             socket_enviar(socket_fd, &resp);
         }
     }
 
-    /* Señalar a todos los hilos que deben terminar y esperarlos */
     for (int f = 0; f < NUM_FICHAS; f++) {
         args[f].terminado = 1;
         sem_post(&args[f].sem_mover);

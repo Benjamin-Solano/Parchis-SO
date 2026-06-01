@@ -15,7 +15,7 @@
 
 #define QUANTUM_BASE       1
 #define QUANTUM_PRIORIDAD  2
-#define FICHAS_CERCA_META  4   /* casillas para considerarse "cerca" */
+#define FICHAS_CERCA_META  4
 
 void arbitro_init(Arbitro *a)
 {
@@ -71,10 +71,6 @@ void arbitro_recibir_stats(Arbitro *a, Tablero *t)
     /* Las estadísticas llegan por pipes al finalizar — ver main.c */
 }
 
-/* ── CONSUMIDOR de la cola de eventos ──
-   Vacía de forma NO bloqueante (IPC_NOWAIT) todos los eventos que los
-   hilos-ficha (productores) hayan depositado. Esto cierra el patrón
-   productor-consumidor: antes la cola se llenaba y nunca se leía. */
 void arbitro_drenar_eventos(Arbitro *a)
 {
     if (a->msqid < 0) return;
@@ -85,7 +81,6 @@ void arbitro_drenar_eventos(Arbitro *a)
                   0 /* cualquier tipo */, IPC_NOWAIT) >= 0) {
         a->eventos_consumidos++;
     }
-    /* msgrcv sale del bucle con -1 y errno=ENOMSG cuando la cola queda vacía */
 }
 
 void arbitro_loop(Arbitro *a, Tablero *t, pid_t pids[NUM_JUGADORES])
